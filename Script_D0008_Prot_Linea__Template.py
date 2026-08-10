@@ -1,3 +1,7 @@
+# OneFLT: una sola lógica de fallas y se utiliza un selector para definir la ubicaci贸n de la falla
+# SwBK: Se operan los interruptores con switches manuales, sin lógica de operaci贸n de CB
+
+
 import rtds.rscadfx
 import time
 import numpy as np
@@ -137,7 +141,7 @@ def fault_dur( time, pto_falla ):
 
 # Read the Excel file that contains the test cases
 
-df= pd.read_excel( "C:/Archivos_JM/Validación Firmware Relays/Def_Pruebas_Prot_Dist__D008.xlsx", sheet_name= "Hoja1", index_col= "Caso", usecols='A:M', nrows= 17 )
+df= pd.read_excel( "C:/Archivos_JM/Validacion_Firmware_Relays/Def_Pruebas_Prot_Dist__D008.xlsx", sheet_name= "Hoja1", index_col= "Caso", usecols='A:M', nrows= 17 )
 print( df.head )
 
 

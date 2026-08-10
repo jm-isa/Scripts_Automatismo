@@ -76,7 +76,7 @@ def fault_dur( time ):
 
 # Read the Excel file that contains the test cases
 
-df= pd.read_excel( "C:/Archivos_JM/Validación Firmware Relays/Def_Pruebas_Prot_Dist__D008.xlsx", sheet_name= "Hoja1", index_col= "Caso", usecols='A:M', nrows= 17 )
+df= pd.read_excel( "C:/Archivos_JM/Validacion_Firmware_Relays/Def_Pruebas_Prot_Dist__D008.xlsx", sheet_name= "Hoja1", index_col= "Caso", usecols='A:M', nrows= 17 )
 print( df.head )
 
 
