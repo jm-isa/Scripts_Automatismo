@@ -5,9 +5,10 @@ import pandas as pd
 from rtds.constants import BUTTON, PLOT_CONTAINER, SLIDER, SWITCH
 from rtds.rscadfx import RSCADError
 
-# OneFLT: una sola lógica de fallas y se utiliza un selector para definir la ubicación de la falla
-# PlsBK: Se operan los interruptores con pulsadores, con lógica de operación y memoria
-# IyM-A1: Configuración Interruptor y Medio en A1
+
+# OneFLT: una sola lï¿½gica de fallas y se utiliza un selector para definir la ubicaciï¿½n de la falla
+# PlsBK: Se operan los interruptores con pulsadores, con lï¿½gica de operaciï¿½n y memoria
+# IyM-A1: Configuraciï¿½n Interruptor y Medio en A1
 
 
 def checkpoint_sim():
@@ -167,7 +168,7 @@ try:
       
 
   
-  for caso in list( range( 1,4 ) ):                           #list( range( 1, 5 ) ):      df.index
+  for caso in list( range( 1,2 ) ):                           #list( range( 1, 5 ) ):      df.index
     
     print( f"""
     &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
