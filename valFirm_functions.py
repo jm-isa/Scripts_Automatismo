@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 import time
+from pathlib import Path
 from rtds.constants import BUTTON, PLOT_CONTAINER, SLIDER, SWITCH
 import rtds.rscadfx
+import numpy as np
 import pandas as pd
 
 
@@ -90,7 +92,11 @@ class RTDSModel:
     }    
     
     self.goose_dict= { 
-      signal: { "path": path, "object": casefx.get_signal( path )  } 
+      signal: { 
+        "path": path, 
+        "object": casefx.get_signal( path ), 
+        "cases": {}
+        } 
       for signal, path in self.goose_signals.items() 
     }
     
@@ -102,8 +108,13 @@ class RTDSModel:
     }
     
     self.fltln_dict= { 
-      signal: { "path": path, "object": casefx.get_signal( path )  } 
+      signal: { "path": path, "object": casefx.get_signal( path ), "cases": {} } 
       for signal, path in self.fltln_signals.items() 
+    }
+    
+    self.calc_vars= {
+      "g_trip_time": self.calc_g_trip_time,
+      "diff_Flt_tripTime": self.calc_diff_flt_trip_time,
     }
     
     
@@ -159,6 +170,12 @@ class RTDSModel:
     print( f"Fault Duration= { tf }" )
 
 
+  def fault_location( self, pto_falla ):
+    self.flt_location.position= self.flt_loc[ pto_falla ]
+    print( f"Fault Location= { pto_falla } -- { self.flt_loc[ pto_falla ] }" )
+    print( f"+++ Fault Location Val= { self.flt_location.value }" )
+
+
   def fault_type( self, tp, value= 1 ):
 
     if tp == "AG": self.flt_tp[ "AG" ].position= value
@@ -202,53 +219,182 @@ class RTDSModel:
       
     e_fltln= [ f for f in self.fltln_dict if f[-1] == str( flt_loc ) ][0]                           # 'flt_loc' defines the fault location in the actual case, so just the 'fltln_dict' field is computed
     print( f" E_FLTLN= { e_fltln }" )
+    
     data= self.fltln_dict[ e_fltln ][ "object" ].get_data()
     time= self.fltln_dict[ e_fltln ][ "object" ].get_time_data()
-    df= pd.DataFrame( list ( zip( data, time ) ), columns= [ "data", "f_time" ] )
-    # self.fltln_dict[ e_fltln ][ "df" ]= df
+    
+    df= pd.DataFrame( { 
+        "data": data, 
+        "f_time": time 
+    } )
+    
     flt= df.loc[ df[ 'data' ] > 0, 'f_time' ]                                                       # This number changes depending on the fault type, but always is '> 0' if a fault is applied
-    self.fltln_dict[ e_fltln ][ f"Caso_{ caso }" ]= {}
-    self.fltln_dict[ e_fltln ][ f"Caso_{ caso }" ][ "f_trip_time" ]= float( flt.iloc[0] ) if not flt.empty else 0
+    
+    self.fltln_dict[ e_fltln ][ "cases" ][ f"Caso_{ caso }" ]= { "f_trip_time": float( flt.iloc[0] ) if not flt.empty else 0 }
   
     # for i in self.fltln_dict:                                                                     # In case of multiple fault location at the same time
     #   if i == e_fltln:
     #     data= self.fltln_dict[ i ][ "object" ].get_data()
     #     time= self.fltln_dict[ i ][ "object" ].get_time_data()
     #     df= pd.DataFrame( list ( zip( data, time ) ), columns= [ "data", "f_time" ] )
-    #     self.fltln_dict[ e_fltln ][ f"Caso_{ caso }" ][ "df" ]= df
-    #     self.fltln_dict[ e_fltln ][ f"Caso_{ caso }" ][ "f_trip_time" ]= list( df[ df[ 'data' ] == 1 ][ 'f_time' ] )[0]
+    #     self.fltln_dict[ e_fltln ][ "cases" ][ f"Caso_{ caso }" ][ "df" ]= df
+    #     self.fltln_dict[ e_fltln ][ "cases" ][ f"Caso_{ caso }" ][ "f_trip_time" ]= list( df[ df[ 'data' ] == 1 ][ 'f_time' ] )[0]
       
-    return self.fltln_dict[ e_fltln ][ f"Caso_{ caso }" ][ "f_trip_time" ]
+    return self.fltln_dict[ e_fltln ][ "cases" ][ f"Caso_{ caso }" ][ "f_trip_time" ]
      
   
   
-  def get_goose_data( self, caso, f_trip_time= 0 ):   
+  # def get_goose_data( self, caso, f_trip_time= 0 ):   
       
-    oper= []
-    for i in self.goose_dict:
-      data= self.goose_dict[ i ][ "object" ].get_data()
-      time= self.goose_dict[ i ][ "object" ].get_time_data()
-      df= pd.DataFrame( list ( zip( data, time ) ), columns= [ "data", "g_time" ] )
-      self.goose_dict[ i ][ f"Caso_{ caso }" ]= {}
-      self.goose_dict[ i ][ f"Caso_{ caso }" ][ "df" ]= df
-      flt= df.loc[ df[ 'data' ] == 1, 'g_time' ]    
-      self.goose_dict[ i ][ f"Caso_{ caso }" ][ "g_trip_time" ]= float( flt.iloc[0] ) if not flt.empty else 0
-      # self.goose_dict[ i ][ f"Caso_{ caso }" ][ "g_trip_time" ]= list( df[ df[ 'data' ] == 1 ][ 'g_time' ] )[0]
-      diff_Flt_tripTime= self.goose_dict[ i ][ f"Caso_{ caso }" ][ "g_trip_time" ] - f_trip_time
-      self.goose_dict[ i ][ f"Caso_{ caso }" ][ "diff_Flt_tripTime" ]= float( diff_Flt_tripTime ) if not flt.empty else 0
+  #   oper= []
+  #   for i in self.goose_dict:
+  #     data= self.goose_dict[ i ][ "object" ].get_data()
+  #     time= self.goose_dict[ i ][ "object" ].get_time_data()
+  #     df= pd.DataFrame( list ( zip( data, time ) ), columns= [ "data", "g_time" ] )
+  #     self.goose_dict[ i ][ "cases" ][ f"Caso_{ caso }" ]= {}
+  #     self.goose_dict[ i ][ "cases" ][ f"Caso_{ caso }" ][ "df" ]= df
+  #     flt= df.loc[ df[ 'data' ] == 1, 'g_time' ]    
+  #     self.goose_dict[ i ][ "cases" ][ f"Caso_{ caso }" ][ "g_trip_time" ]= float( flt.iloc[0] ) if not flt.empty else 0
+  #     diff_Flt_tripTime= self.goose_dict[ i ][ "cases" ][ f"Caso_{ caso }" ][ "g_trip_time" ] - f_trip_time
+  #     self.goose_dict[ i ][ "cases" ][ f"Caso_{ caso }" ][ "diff_Flt_tripTime" ]= float( diff_Flt_tripTime ) if not flt.empty else 0
       
-      oper.append( self.goose_dict[ i ][ f"Caso_{ caso }" ][ "diff_Flt_tripTime" ] )
+  #     oper.append( self.goose_dict[ i ][ "cases" ][ f"Caso_{ caso }" ][ "diff_Flt_tripTime" ] )
       
-    print( f"\n\n{ oper }\n" )
+  #   print( f"\n\n{ oper }\n" )
     
+  #   return oper
+  
+
+  def get_goose_data( self, caso, f_trip_time= 0 ):
+
+    caso= f"Caso_{ caso }"
+    oper= []
+
+    for signal, goose in self.goose_dict.items():
+
+      data= goose[ "object" ].get_data()
+      time= goose[ "object" ].get_time_data()
+      
+      df= pd.DataFrame( { "data": data, "g_time": time } )
+      
+      goose[ "cases" ][ caso ]= { "df": df }
+      case_data= goose[ "cases" ][ caso ]
+
+      for calc_var, calc_method in self.calc_vars.items():
+        case_data[ calc_var ]= calc_method( f_trip_time= f_trip_time, **case_data )
+
+      oper.append( case_data[ "diff_Flt_tripTime" ] )
+      
     return oper
+         
+  
+  def calc_g_trip_time( self, **case_data ):
+    df= case_data[ "df" ]
+    flt= df.loc[ df[ "data" ] == 1, "g_time" ]
+    
+    return float( flt.iloc[0] ) if not flt.empty else 0
+
+
+  def calc_diff_flt_trip_time( self, **case_data ):
+    g_trip_time= case_data[ "g_trip_time" ]
+    f_trip_time= case_data[ "f_trip_time" ]
+    
+    return g_trip_time - f_trip_time if g_trip_time else 0
+  
+  
+    
+      
+  def export_to_excel_goose_results( self, goose_summary_df, exc_cases ):
+
+    dateNtime= time.strftime( '%d%m%Y_%H%M', time.localtime( time.time() ) )
+    file_name= f"output_D0008_21__{ dateNtime }.xlsx"
+    
+    file_exists= Path( file_name ).exists()    
+    kwargs= { 
+      "engine": "openpyxl",
+      "mode": "a" if file_exists else "w" 
+    }
+    
+    if file_exists: kwargs[ "if_sheet_exists" ]= "replace"                              # "overlay"
+
+    with pd.ExcelWriter( file_name, **kwargs ) as writer:     
+      
+      start_col, start_row= 1, 1
+      
+      # summary sheet
+      goose_summary_df.to_excel( writer, sheet_name= "Summary", startrow= start_row, startcol= start_col, index= True )
+    
+      for caso in exc_cases:
+          
+        df= pd.DataFrame.from_dict(
+          {
+            goose_signal: {
+              key: value
+              for key, value in signal_data[ "cases" ][ caso ].items()
+              if key != "df"
+            }
+            for goose_signal, signal_data in self.goose_dict.items()
+          },
+          orient="index",
+        )
         
+        df.to_excel( writer, sheet_name= caso, startrow= start_row, startcol= start_col, index= True )
+
       
-      
+  
+  def export_json( self ):
+    
+    import copy
+    import json
+    
+    goose_dict_c= copy.deepcopy( vars.goose_dict )
+
+    for i in goose_dict_c:
+      goose_dict_c[ i ][ "object" ]= '0'
+      print( goose_dict_c[ i ][ "object" ] )
+
+    np.save( "goose_dict.npy", goose_dict_c )
+    # im_goose_dict= np.load( "goose_dict.npy", allow_pickle= True ).item()
+
+    for i in goose_dict_c:
+      for j in goose_dict_c[ i ][ 'cases' ].values():
+        j[ 'df_dict' ]= j[ 'df' ].to_dict( orient= 'list' )
+        j.pop( 'df', None )
+        print( f"{ i }  -->  { j.keys() }" )
+
+    json.dump( goose_dict_c, open( "goose_dict.json", "w" ) )                 # Export
+    # im_goose_dict_json= json.load( open( "goose_dict.json" ) )                # Import
+
      
-      
+
+  
+
+
+
+
+
+
+"""
+goose_dict
+└── signal
+    ├── path
+    ├── object
+    └── cases
+        ├── Caso_1
+        │   ├── df
+        │   ├── g_trip_time
+        │   ├── diff_Flt_tripTime
+        │   └── ...
+        │
+        ├── Caso_2
+        │   ├── df
+        │   ├── g_trip_time
+        │   ├── diff_Flt_tripTime
+        │   └── ...
+        │
+        └── ...    
      
-      
+"""
      
       
      

@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 import rtds.rscadfx
 import time
+import copy
+import json
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -16,15 +18,17 @@ from valFirm_functions import RTDSModel
 # - Template__RTDS_IntyMedio
     
 
-
 # Read the Excel file that contains the test cases
 prot_fcn= "21-21POTT-87L-67NCD"
 usecols="A:G"
-nrows= 17 
+nrows= 16 
+df_dir= r"C:\Archivos_JM\Validacion_Firmware_Relays\Def_Pruebas_Prot_Dist__D008.xlsx"
 
-df= pd.read_excel( "C:/Archivos_JM/Validacion_Firmware_Relays/Def_Pruebas_Prot_Dist__D008.xlsx", sheet_name= prot_fcn, index_col= "Caso", usecols= usecols, nrows= nrows )
+df= pd.read_excel( df_dir, sheet_name= prot_fcn, index_col= "Caso", usecols= usecols, nrows= nrows )
 print( df.head )
-  
+      
+casefx_dir= r"C:\RSCAD\RTDS_USER_FX\fileman\Validacion_Firmware_Relays\D008__Template__RTDS__IntyMedio\D008__Template__RTDS__IntyMedio.rtfx"
+ 
 try:
   
   # Objects  
@@ -35,16 +39,17 @@ try:
     
     try:
 
-      casefx= app.open_case( r"C:\RSCAD\RTDS_USER_FX\fileman\Validacion_Firmware_Relays\D008__Template__RTDS__IntyMedio\D008__Template__RTDS__IntyMedio.rtfx" )
+      casefx= app.open_case( casefx_dir )
       
       vars.init_vars( casefx )
       casefx.settings.starting_rack= 2
       casefx.settings.set_plot_window_size( 0.6 )
+      vars.checkpoint_sim()
       casefx.compile()         
       goose_data= []
 
       
-      for caso in list( range( 1,4 ) ):                           # list( range( 1, 5 ) ):      df.index
+      for caso in list( range( 7,14 ) ):                           # list( range( 1, 5 ) ):      df.index
         
         print( f"""
         &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
@@ -58,7 +63,6 @@ try:
           print( f"----- Case { caso } Ommited -----      \n")
           continue
         
-        if caso == 1: vars.checkpoint_sim()
         
         pto_falla= df.PtoFalla[ caso ]
         r_falla= df.RFalla[ caso ]
@@ -68,8 +72,8 @@ try:
         vars.fault_res( r_falla, pto_falla )
         vars.fault_dist( dist, caso, pto_falla )
         vars.fault_dur( tf )
-        vars.flt_location.position= vars.flt_loc[ pto_falla ]
-        print( f"Fault Location: { pto_falla } -- { vars.flt_loc[ pto_falla ] }    \n" )
+        vars.fault_location( pto_falla )
+        print( f"Fault Location Main: {  vars.flt_location.value  }    \n" )
         
         if caso == 10: 
           FLT10_1, FLT10_2= df.TipoFalla[ caso ].split( '-' )
@@ -121,12 +125,21 @@ try:
         
         time.sleep( 1 )                           # CB Ready Supervision Time gap
           
-      goose_data_df= pd.DataFrame( np.transpose( goose_data ), [ g for g in vars.goose_signals ] ).T
-      print( f"\n -------- Goose_data_df: \n { goose_data_df } \n" )
-
-
-
       
+      goose_data_df2= pd.DataFrame( np.transpose( goose_data ), vars.goose_signals ).T
+      print( f"\n -------- Goose_data_df: \n { goose_data_df2 } \n" )
+
+
+      exc_cases= list( next( iter( vars.goose_dict.values() ) )[ "cases" ].keys() )
+      goose_summary_df= pd.DataFrame( 
+        { g_sig: 
+         [ case[ 'diff_Flt_tripTime' ] for i, case in sig_dt[ 'cases' ].items() ] 
+         for g_sig, sig_dt in vars.goose_dict.items() 
+        }, index= exc_cases )
+      
+      vars.export_to_excel_goose_results( goose_summary_df, exc_cases )
+
+
       
 
 
@@ -168,36 +181,3 @@ finally:
 
 
 
-
-# C110_3_TRIP= casefx.get_signal( "Subsystem #1|GTNET|GTNET1|C110_3_TRIP" )       
-# C110_3_TRIP_data= C110_3_TRIP.get_data()
-# C110_3_TRIP_data_t= C110_3_TRIP.get_time_data()
-    
-# PROT_C110_A_Trip= casefx.get_signal( "Subsystem #1|GTNET|GTNET1|PROT_C110_A_Trip" )       
-# PROT_C110_A_Trip_data= PROT_C110_A_Trip.get_data()
-# PROT_C110_A_Trip_data_t= PROT_C110_A_Trip.get_time_data()
-    
-# PROT_C110_B_Trip= casefx.get_signal( "Subsystem #1|GTNET|GTNET1|PROT_C110_B_Trip" )       
-# PROT_C110_B_Trip_data= PROT_C110_B_Trip.get_data()
-# PROT_C110_B_Trip_data_t= PROT_C110_B_Trip.get_time_data()
-    
-# PROT_C110_C_Trip= casefx.get_signal( "Subsystem #1|GTNET|GTNET1|PROT_C110_C_Trip" )       
-# PROT_C110_C_Trip_data= PROT_C110_C_Trip.get_data()
-# PROT_C110_C_Trip_data_t= PROT_C110_C_Trip.get_time_data()
-    
-
-# C010_3_TRIP= casefx.get_signal( "Subsystem #1|GTNET|GTNET1|C010_3_TRIP" )       
-# C010_3_TRIP_data= C010_3_TRIP.get_data()
-# C010_3_TRIP_data_t= C010_3_TRIP.get_time_data()
-    
-# PROT_C010_A_Trip= casefx.get_signal( "Subsystem #1|GTNET|GTNET1|PROT_C010_A_Trip" )       
-# PROT_C010_A_Trip_data= PROT_C010_A_Trip.get_data()
-# PROT_C010_A_Trip_data_t= PROT_C010_A_Trip.get_time_data()
-    
-# PROT_C010_B_Trip= casefx.get_signal( "Subsystem #1|GTNET|GTNET1|PROT_C010_B_Trip" )       
-# PROT_C010_B_Trip_data= PROT_C010_B_Trip.get_data()
-# PROT_C010_B_Trip_data_t= PROT_C010_B_Trip.get_time_data()
-    
-# PROT_C010_C_Trip= casefx.get_signal( "Subsystem #1|GTNET|GTNET1|PROT_C010_C_Trip" )       
-# PROT_C010_C_Trip_data= PROT_C010_C_Trip.get_data()
-# PROT_C010_C_Trip_data_t= PROT_C010_C_Trip.get_time_data()
