@@ -88,7 +88,13 @@ class RTDSModel:
       "g__PROT_C010_A_Trip": "Subsystem #1|GTNET|GTNET1|g__PROT_C010_A_Trip",
       "g__PROT_C010_B_Trip": "Subsystem #1|GTNET|GTNET1|g__PROT_C010_B_Trip",
       "g__PROT_C010_C_Trip": "Subsystem #1|GTNET|GTNET1|g__PROT_C010_C_Trip",
-      "g__Pickup_Z1": "Subsystem #1|GTNET|GTNET1|g__Pickup_Z1"
+      "g__Pickup_Z1": "Subsystem #1|GTNET|GTNET1|g__Pickup_Z1",
+      "posC110_A": "Subsystem #1|CTLs|Vars|posC110_A",
+      "posC110_B": "Subsystem #1|CTLs|Vars|posC110_B",
+      "posC110_C": "Subsystem #1|CTLs|Vars|posC110_C",
+      "posC010_A": "Subsystem #1|CTLs|Vars|posC010_A",
+      "posC010_B": "Subsystem #1|CTLs|Vars|posC010_B",
+      "posC010_C": "Subsystem #1|CTLs|Vars|posC010_C",
     }    
     
     self.goose_dict= { 
@@ -211,7 +217,7 @@ class RTDSModel:
       elif x == "BCG" or x == "CBG": flt10.value= 18
       elif x == "ABCG": flt10.value= 17
 
-      print( f"\n++++++++++ Fault Evolution= FLT10_1: { x }= { flt10.value } ++++++++\n" )
+      print( f"\n++++++++++ Evolving Fault: FLT10_1 -> { x }= { flt10.value } ++++++++\n" )
 
     
     
@@ -347,7 +353,7 @@ class RTDSModel:
     import copy
     import json
     
-    goose_dict_c= copy.deepcopy( vars.goose_dict )
+    goose_dict_c= copy.deepcopy( self.goose_dict )
 
     for i in goose_dict_c:
       goose_dict_c[ i ][ "object" ]= '0'
@@ -366,6 +372,113 @@ class RTDSModel:
     # im_goose_dict_json= json.load( open( "goose_dict.json" ) )                # Import
 
      
+
+  def Dist_prot( self, casefx, app ):
+    
+    # Read the Excel file that contains the test cases
+    prot_fcn= "21-21POTT-87L-67NCD"
+    usecols="A:G"
+    nrows= 16 
+    df_dir= r"C:\Archivos_JM\Validacion_Firmware_Relays\Def_Pruebas_Prot_Dist__D008.xlsx"
+
+    df= pd.read_excel( df_dir, sheet_name= prot_fcn, index_col= "Caso", usecols= usecols, nrows= nrows )
+    print( df.head )
+    goose_data= []
+
+    
+    for caso in df.index:                           # list( range( 1, 5 ) ):      df.index
+      
+      print( f"""
+      &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+      
+      Executing Case= { caso }
+      
+      &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+      \n""" )     
+      
+      if df.Enable[ caso ] == 0:
+        print( f"----- Case { caso } Ommitted -----      \n")
+        continue
+      
+      
+      pto_falla= df.PtoFalla[ caso ]
+      r_falla= df.RFalla[ caso ]
+      dist= df.DistPcnt[ caso ]
+      tf= df.TFalla[ caso ]
+      
+      self.fault_res( r_falla, pto_falla )
+      self.fault_dist( dist, caso, pto_falla )
+      self.fault_dur( tf )
+      self.fault_location( pto_falla )
+      print( f"Fault Location Main: {  self.flt_location.value  }    \n" )
+      
+      if caso == 10: 
+        FLT10_1, FLT10_2= df.TipoFalla[ caso ].split( '-' )
+        self.evol_flt( FLT10_1, FLT10_2 )
+      else:
+        tp= df.TipoFalla[ caso ]
+        self.fault_type( tp )
+      
+      casefx.compile()
+      casefx.run()
+      time.sleep( 1 )
+      casefx.update_plots()
+      
+      time.sleep( 3 )
+      
+      if caso == 10:
+        self.push_button( self.flt_Case10_bt ) 
+        # time.sleep( float( tf ) )           
+        # self.fault_type( tp, 0 )                  
+        # self.fault_type( tp2 )                    
+        # self.push_button( self.flt_bt )     
+        # time.sleep( 3 )
+        
+      elif caso == 11:  
+        self.push_button( self.flt_bt )
+        time.sleep( 0.2 )
+        self.push_button( self.Opn_DSs[ "Opn_DS_LN2_Bus1_bt" ] ) 
+        # self.push_button( self.DSs[ "Opn_DS_LA127_bt" ] )                    # Para el caso 'IntyMedio_0'
+        
+      elif caso == 12:  
+        self.push_button( self.flt_bt )
+        time.sleep( 0.2 )      
+        self.push_button( self.Opn_DSs[ "Opn_DS_LN2_Bus2_bt" ] ) 
+        # self.push_button( self.DSs[ "Opn_DS_LB127" ] )                       # Para el caso 'IntyMedio_0'           
+
+      else: self.push_button( self.flt_bt )
+
+      f_trip_time= self.get_fltln_data( caso, self.flt_loc[ pto_falla ] )
+      
+      goose_data_case= self.get_goose_data( caso, f_trip_time )
+      goose_data.append( goose_data_case )
+      # time.sleep( 6 )                   
+      
+      print( f"----- Case { caso } executed successfully! ----    \n" )
+      app.print_message( f"----- Case { caso } executed successfully! ----    \n" )  
+      
+      casefx.stop()    
+      self.checkpoint_sim()
+      
+      time.sleep( 1 )                           # CB Ready Supervision Time gap
+        
+    
+    goose_data_df2= pd.DataFrame( np.transpose( goose_data ), self.goose_signals ).T
+    print( f"\n -------- Goose_data_df: \n { goose_data_df2 } \n" )
+
+
+
+  def goose_summary( self, goose_dict ):
+    exc_cases= list( next( iter( goose_dict.values() ) )[ "cases" ].keys() )
+    goose_summary_df= pd.DataFrame( 
+      { g_signal: 
+        [ case[ 'diff_Flt_tripTime' ] for i, case in signal_dt[ 'cases' ].items() ] 
+        for g_signal, signal_dt in goose_dict.items() 
+      }, index= exc_cases )
+    
+    print( f"\n -------- Goose_summary_df: \n { goose_summary_df }" )
+    self.export_to_excel_goose_results( goose_summary_df, exc_cases )
+
 
   
 
